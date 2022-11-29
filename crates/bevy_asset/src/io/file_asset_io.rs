@@ -6,7 +6,7 @@ use anyhow::Result;
 use bevy_ecs::system::Res;
 use bevy_utils::BoxedFuture;
 #[cfg(feature = "filesystem_watcher")]
-use bevy_utils::HashSet;
+use bevy_utils::{default, HashSet};
 #[cfg(feature = "filesystem_watcher")]
 use crossbeam_channel::TryRecvError;
 use fs::File;
@@ -38,7 +38,7 @@ impl FileAssetIo {
     pub fn new<P: AsRef<Path>>(path: P, watch_for_changes: bool) -> Self {
         let file_asset_io = FileAssetIo {
             #[cfg(feature = "filesystem_watcher")]
-            filesystem_watcher: Default::default(),
+            filesystem_watcher: default(),
             root_path: Self::get_base_path().join(path.as_ref()),
         };
         if watch_for_changes {
@@ -118,15 +118,19 @@ impl AssetIo for FileAssetIo {
         )))
     }
 
-    fn watch_path_for_changes(&self, _path: &Path) -> Result<(), AssetIoError> {
+    fn watch_path_for_changes(
+        &self,
+        to_watch: &Path,
+        to_reload: PathBuf,
+    ) -> Result<(), AssetIoError> {
         #[cfg(feature = "filesystem_watcher")]
         {
-            let path = self.root_path.join(_path);
+            let to_watch = self.root_path.join(to_watch);
             let mut watcher = self.filesystem_watcher.write();
             if let Some(ref mut watcher) = *watcher {
                 watcher
-                    .watch(&path)
-                    .map_err(|_error| AssetIoError::PathWatchError(path))?;
+                    .watch(&to_watch, to_reload)
+                    .map_err(|_error| AssetIoError::PathWatchError(to_watch))?;
             }
         }
 
@@ -136,7 +140,7 @@ impl AssetIo for FileAssetIo {
     fn watch_for_changes(&self) -> Result<(), AssetIoError> {
         #[cfg(feature = "filesystem_watcher")]
         {
-            *self.filesystem_watcher.write() = Some(FilesystemWatcher::default());
+            *self.filesystem_watcher.write() = Some(default());
         }
         #[cfg(not(feature = "filesystem_watcher"))]
         bevy_log::warn!("Watching for changes is not supported when the `filesystem_watcher` feature is disabled");
@@ -188,8 +192,10 @@ pub fn filesystem_watcher_system(asset_server: Res<AssetServer>) {
             {
                 for path in &paths {
                     if !changed.contains(path) {
-                        let relative_path = path.strip_prefix(&asset_io.root_path).unwrap();
-                        let _ = asset_server.load_untracked(relative_path.into(), true);
+                        let Some(set) = watcher.path_map.get(path) else {continue};
+                        for to_reload in set {
+                            let _ = asset_server.load_untracked(to_reload.as_path().into(), true);
+                        }
                     }
                 }
                 changed.extend(paths);
