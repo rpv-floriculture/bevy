@@ -66,7 +66,15 @@ pub trait AssetIo: Downcast + Send + Sync + 'static {
     fn get_metadata(&self, path: &Path) -> Result<Metadata, AssetIoError>;
 
     /// Tells the asset I/O to watch for changes recursively at the provided path.
-    fn watch_path_for_changes(&self, path: &Path) -> Result<(), AssetIoError>;
+    /// No-op if `watch_for_changes` hasn't been called yet.
+    /// Otherwise, if `to_watch` gets modified, trigger a reload for `to_reload`.
+    /// Note that multiple `to_reload` paths can map to the same `to_watch` and
+    /// multiple `to_watch` paths can map to the same `to_reload`.
+    fn watch_path_for_changes(
+        &self,
+        to_watch: &Path,
+        to_reload: PathBuf,
+    ) -> Result<(), AssetIoError>;
 
     /// Enables change tracking in this asset I/O.
     fn watch_for_changes(&self) -> Result<(), AssetIoError>;
