@@ -934,7 +934,7 @@ where
         if let Some(mut entity) = world.get_entity_mut(self.entity) {
             entity.insert(self.bundle);
         } else {
-            panic!("error[B0003]: Could not insert a bundle (of type `{}`) for entity {:?} because it doesn't exist in this World.", std::any::type_name::<T>(), self.entity);
+            error!("error[B0003]: Could not insert a bundle (of type `{}`) for entity {:?} because it doesn't exist in this World.", std::any::type_name::<T>(), self.entity);
         }
     }
 }
